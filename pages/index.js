@@ -1,8 +1,7 @@
+import React from 'react'; //  <-- 关键的修复，确保React在构建时被定义
 import Head from 'next/head';
 
-// 为了代码整洁，我们将SVG图标定义为React组件
-// 您可以将它们放在一个单独的文件中，但为了方便，我们直接内联在这里
-
+// --- Icon Components ---
 const IconWallet = (props) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m12 6H9" />
@@ -84,7 +83,7 @@ export default function Dashboard() {
         icon: IconBolt,
         metrics: [
           { label: '统计额度', value: '$0.95', icon: '💰', color: 'yellow' },
-          { label: '统计Tokens', value: '479082', icon: '𝐓', color: 'pink' },
+          { label: '统计Tokens', value: '479082', icon: 'T', color: 'pink' },
         ],
         chart: <svg className="w-20 h-8 text-orange-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 80 32"><path d="M0 20 c 20 -15, 40 15, 60 -10 l 20 10"/></svg>
       },
@@ -112,7 +111,7 @@ export default function Dashboard() {
   const apiInfo = [
     { name: '美国线路', url: 'https://globalai.vip', desc: '主线路-国内直连', icon: '🇺🇸', color: 'blue' },
     { name: '香港线路', url: 'https://hk.globalai.vip', desc: '备用节点1', icon: '🇭🇰', color: 'green' },
-    { name: 'Cloudflare', url: 'https://api.globalai.vip', desc: '备用线路2', icon: 'c L', color: 'sky' },
+    { name: 'Cloudflare', url: 'https://api.globalai.vip', desc: '备用线路2', icon: 'cl', color: 'sky' },
   ]
   
   const colorMap = {
@@ -199,19 +198,16 @@ export default function Dashboard() {
                     <h3 className="text-gray-700 font-semibold">模型消耗分布</h3>
                     <p className="text-sm text-gray-500">总计: $0.95</p>
                 </div>
-                <div className="h-72 flex justify-around items-end space-x-2">
+                <div className="h-72 flex justify-around items-end space-x-2 px-4">
                  {chartData.map((bar, index) => (
                     <div key={index} className="flex-1 flex flex-col items-center justify-end h-full">
-                        <div className="w-10/12 flex flex-col justify-end" style={{ height: `${bar.value * 8}px` }}>
-                            {bar.stacks ? (
-                                <>
-                                    <div className="bg-yellow-400" style={{'height': `${bar.value - bar.stacks.reduce((acc, s) => acc + s.value, 0)}%`}}></div>
-                                    {bar.stacks.map((stack, sIndex) => (
-                                        <div key={sIndex} className={stack.color} style={{'height': `${stack.value}%`}}></div>
+                        <div className="w-10/12 flex flex-col-reverse" style={{ height: `${bar.value > 0 ? bar.value * 8 : 0}px` }}>
+                            {bar.value > 0 && (
+                                <div className={bar.color} style={{ height: '100%', position: 'relative' }}>
+                                    {bar.stacks && bar.stacks.map((stack, sIndex) => (
+                                        <div key={sIndex} className={stack.color} style={{ height: `${(stack.value / bar.value) * 100}%` }}></div>
                                     ))}
-                                </>
-                            ) : (
-                                <div className={bar.color} style={{'height': '100%'}}></div>
+                                </div>
                             )}
                         </div>
                         <span className="text-xs text-gray-500 mt-2">{bar.time}</span>
@@ -231,7 +227,7 @@ export default function Dashboard() {
                         <div key={index} className="border-b pb-4 last:border-b-0">
                              <div className="flex items-start space-x-4">
                                <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-mono text-sm font-bold ${colorMap[api.color].bg} ${colorMap[api.color].text}`}>
-                                   {api.icon}
+                                   {api.icon === 'cl' ? <span>cl</span> : api.icon}
                                </div>
                                <div>
                                    <h3 className="font-semibold text-gray-800">{api.name}</h3>
