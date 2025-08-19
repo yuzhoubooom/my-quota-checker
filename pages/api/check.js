@@ -1,6 +1,6 @@
 import Head from 'next/head';
 import { useState, useEffect } from 'react';
-import styles from '../styles/Home.module.css'; // 我们会使用一些默认样式
+//import styles from '../styles/Home.module.css'; // 我们会使用一些默认样式
 
 export default function Home() {
   // 创建三个“状态”来存放我们的数据
