@@ -11,14 +11,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Token is required' });
   }
 
-  // --- 基于侦察结果的配置 ---
-  // global.vip 的 Token 信息接口
   const API_URL = 'https://globalai.vip/api/token';
-  // global.vip 的 Quota 与 美元 的换算比例
   const QUOTA_TO_USD_RATE = 500000;
 
   const headers = {
-    // 使用从前端传来的 token 进行认证
     'Authorization': `Bearer ${token}`,
   };
 
@@ -26,25 +22,34 @@ export default async function handler(req, res) {
     const response = await fetch(API_URL, { headers });
     const data = await response.json();
 
+    // --- !! 新增的关键日志 !! ---
+    // 无论成功失败, 我们都将收到的原始数据打印到Vercel的服务器日志中
+    console.log('Received raw data from globalai.vip:', JSON.stringify(data, null, 2));
+    
     if (!response.ok) {
-        // 如果API返回错误（例如Token无效），将服务商的错误信息直接返回给用户
         throw new Error(data.message || '查询失败，请检查Token或API服务商状态。');
     }
 
-    // 从返回的 টোকেন列表 (items array) 中，找到用户输入的那一个
-    const allTokens = data.data.items;
+    // --- !! 代码加固 !! ---
+    // 我们不再假设 data.data.items 存在, 而是安全地检查它
+    // 我们使用可选链 (?.), 如果路径上任何一步是 undefined, 结果就是 undefined, 不会崩溃
+    const allTokens = data?.data?.items; 
+
+    // 如果 allTokens 最终是 undefined 或 null, 说明数据结构确实不符合预期
+    if (!allTokens) {
+      // 抛出一个更明确的错误
+      throw new Error('Unexpected API response structure from globalai.vip. Check Vercel logs for raw data.');
+    }
+    
     const currentTokenInfo = allTokens.find(item => item.key === token);
 
-    // 如果在返回的列表中没找到这个token，说明token无效
     if (!currentTokenInfo) {
       throw new Error('无效的Token，未在您的账户下找到该Token。');
     }
 
-    // 从找到的Token信息中提取配额
     const remainQuota = currentTokenInfo.remain_quota;
     const usedQuota = currentTokenInfo.used_quota;
     
-    // 如果是无限额度，则特殊处理
     if (currentTokenInfo.unlimited_quota) {
         res.status(200).json({
           total_granted: "无限",
@@ -54,12 +59,10 @@ export default async function handler(req, res) {
         return;
     }
 
-    // 使用破解的公式进行换算
     const totalGranted = (remainQuota + usedQuota) / QUOTA_TO_USD_RATE;
     const totalUsed = usedQuota / QUOTA_TO_USD_RATE;
     const totalAvailable = remainQuota / QUOTA_TO_USD_RATE;
 
-    // 将格式化后的结果以 JSON 格式成功返回给前端
     res.status(200).json({
       total_granted: totalGranted.toFixed(4),
       total_used: totalUsed.toFixed(4),
@@ -67,7 +70,8 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('API查询失败:', error);
+    // 将错误信息打印到服务器日志，并返回给前端
+    console.error('Error in API handler:', error);
     res.status(500).json({ error: error.message });
   }
 }
