@@ -12,9 +12,7 @@ export default async function handler(req, res) {
   }
 
   // --- 读取双重验证信息 ---
-  // 1. 读取“门禁卡”（系统访问令牌）
   const accessToken = process.env.GLOBAL_VIP_ACCESS_TOKEN;
-  // 2. 读取“员工ID”（用户ID）
   const userId = process.env.GLOBAL_VIP_USER_ID;
 
   // --- 安全检查 ---
@@ -47,14 +45,13 @@ export default async function handler(req, res) {
       throw new Error('服务商API响应结构异常，请联系管理员。');
     }
     
-    // 在返回的所有密钥中找到我们想查的那一个
     const currentTokenInfo = allTokens.find(item => item.key === apiKeyToQuery);
 
     if (!currentTokenInfo) {
       throw new Error('查询成功，但在您的账户下未找到这个API Key。');
     }
 
-    // --- 余额计算逻辑（保持不变） ---
+    // --- 余额计算逻辑 ---
     const usedQuota = currentTokenInfo.used_quota;
     
     if (currentTokenInfo.unlimited_quota) {
@@ -81,14 +78,4 @@ export default async function handler(req, res) {
     console.error('API Handler Error:', error);
     res.status(500).json({ error: error.message });
   }
-}```
-
-### **第三步：发起总攻！**
-
-我们已万事俱备。请进行最后一次部署。
-
-1.  **保存** `pages/api/check.js` 文件。
-2.  在**终端**中执行：
-
-    ```bash
-    git add .
+}
