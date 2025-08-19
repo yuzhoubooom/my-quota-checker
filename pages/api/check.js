@@ -6,29 +6,31 @@ export default async function handler(req, res) {
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  // 从前端获取用户输入的，想要查询余额的“API密钥” (例如 ...RL7C)
   const { token: apiKeyToQuery } = req.body;
   if (!apiKeyToQuery) {
     return res.status(400).json({ error: '您需要输入一个API Key进行查询' });
   }
 
-  // --- 这是我们的制胜法宝 ---
-  // 读取 Vercel 环境变量中存储的“超级门禁卡”（系统访问令牌）
+  // --- 读取双重验证信息 ---
+  // 1. 读取“门禁卡”（系统访问令牌）
   const accessToken = process.env.GLOBAL_VIP_ACCESS_TOKEN;
+  // 2. 读取“员工ID”（用户ID）
+  const userId = process.env.GLOBAL_VIP_USER_ID;
 
-  if (!accessToken) {
-    // 如果服务器没有配置这个环境变量，就提前报错，这是一个安全措施
-    console.error("错误：服务器环境变量 GLOBAL_VIP_ACCESS_TOKEN 未设置！");
-    return res.status(500).json({ error: '服务器配置错误，管理员未设置访问令牌。' });
+  // --- 安全检查 ---
+  if (!accessToken || !userId) {
+    console.error("服务器配置错误：GLOBAL_VIP_ACCESS_TOKEN 或 GLOBAL_VIP_USER_ID 未设置！");
+    return res.status(500).json({ error: '服务器配置错误，管理员未设置完整的访问凭证。' });
   }
-  
-  // -- 定义常量 --
+
+  // --- 定义API常量 ---
   const API_URL = 'https://globalai.vip/api/token';
   const QUOTA_TO_USD_RATE = 500000;
 
-  // 使用“超级门禁卡” (Access Token) 进行身份验证
+  // --- 构建包含双重验证的请求头 ---
   const headers = {
-    'Authorization': `Bearer ${accessToken}`,
+    'Authorization': `Bearer ${accessToken}`, // “门禁卡”
+    'New-Api-User': userId,                   // “员工ID”
   };
 
   try {
@@ -36,22 +38,19 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok || data.success === false) {
-      // 如果API返回错误（例如Access Token失效），将服务商的错误信息直接返回
-      throw new Error(data.message || '查询失败，请检查您的系统访问令牌是否有效。');
+      throw new Error(data.message || '查询失败，请检查您的访问凭证是否有效。');
     }
 
-    // 从返回的所有密钥列表中，找到我们想查询的那一个
     const allTokens = data.data.items;
     if (!allTokens) {
-      // 如果API返回的数据结构不符合预期
       console.log('Unexpected API response structure:', JSON.stringify(data, null, 2));
       throw new Error('服务商API响应结构异常，请联系管理员。');
     }
-
+    
+    // 在返回的所有密钥中找到我们想查的那一个
     const currentTokenInfo = allTokens.find(item => item.key === apiKeyToQuery);
 
     if (!currentTokenInfo) {
-      // 如果在列表中没找到用户输入的那个密钥
       throw new Error('查询成功，但在您的账户下未找到这个API Key。');
     }
 
@@ -82,4 +81,14 @@ export default async function handler(req, res) {
     console.error('API Handler Error:', error);
     res.status(500).json({ error: error.message });
   }
-}
+}```
+
+### **第三步：发起总攻！**
+
+我们已万事俱备。请进行最后一次部署。
+
+1.  **保存** `pages/api/check.js` 文件。
+2.  在**终端**中执行：
+
+    ```bash
+    git add .
