@@ -1,75 +1,73 @@
-import Head from 'next/head';
-import { useState, useEffect } from 'react';
-//import styles from '../styles/Home.module.css'; // 我们会使用一些默认样式
+// pages/api/check.js
 
-export default function Home() {
-  // 创建三个“状态”来存放我们的数据
-  // 1. loading: 追踪是否正在加载中
-  // 2. error: 存放可能出现的错误信息
-  // 3. creditInfo: 存放从API成功获取的额度信息
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [creditInfo, setCreditInfo] = useState(null);
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
 
-  // useEffect 是一个钩子函数，它会在组件第一次加载到屏幕上时运行
-  // 这正是我们发起API请求的最佳时机
-  useEffect(() => {
-    // 定义一个异步函数来获取数据
-    async function fetchData() {
-      try {
-        // 使用 fetch 请求我们自己的后端API
-        // 在Next.js中，可以直接使用相对路径
-        const response = await fetch('/api/check');
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: 'Token is required' });
+  }
 
-        // 如果请求失败（比如服务器返回404或500错误），则抛出一个错误
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+  // --- 基于侦察结果的配置 ---
+  // global.vip 的 Token 信息接口
+  const API_URL = 'https://globalai.vip/api/token';
+  // global.vip 的 Quota 与 美元 的换算比例
+  const QUOTA_TO_USD_RATE = 500000;
 
-        // 将返回的JSON数据解析出来
-        const data = await response.json();
-        // 将数据存入我们的状态中
-        setCreditInfo(data);
-      } catch (e) {
-        // 如果捕获到任何错误，就将错误信息存入状态
-        setError(e.message);
-      } finally {
-        // 无论成功还是失败，最后都将加载状态设置为false
-        setLoading(false);
-      }
+  const headers = {
+    // 使用从前端传来的 token 进行认证
+    'Authorization': `Bearer ${token}`,
+  };
+
+  try {
+    const response = await fetch(API_URL, { headers });
+    const data = await response.json();
+
+    if (!response.ok) {
+        // 如果API返回错误（例如Token无效），将服务商的错误信息直接返回给用户
+        throw new Error(data.message || '查询失败，请检查Token或API服务商状态。');
     }
 
-    // 调用上面定义的函数，开始获取数据
-    fetchData();
-  }, []); // 空数组 [] 确保这个 effect 只运行一次
+    // 从返回的 টোকেন列表 (items array) 中，找到用户输入的那一个
+    const allTokens = data.data.items;
+    const currentTokenInfo = allTokens.find(item => item.key === token);
 
-  // --- 渲染部分 ---
-  // 根据不同的状态，返回不同的HTML内容
-  return (
-    <div className={styles.container}>
-      <Head>
-        <title>Global AI Credit Checker</title>
-        <meta name="description" content="Check your Global AI API credit" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+    // 如果在返回的列表中没找到这个token，说明token无效
+    if (!currentTokenInfo) {
+      throw new Error('无效的Token，未在您的账户下找到该Token。');
+    }
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Global AI API 额度查询
-        </h1>
+    // 从找到的Token信息中提取配额
+    const remainQuota = currentTokenInfo.remain_quota;
+    const usedQuota = currentTokenInfo.used_quota;
+    
+    // 如果是无限额度，则特殊处理
+    if (currentTokenInfo.unlimited_quota) {
+        res.status(200).json({
+          total_granted: "无限",
+          total_used: (usedQuota / QUOTA_TO_USD_RATE).toFixed(4),
+          total_available: "无限",
+        });
+        return;
+    }
 
-        <div className={styles.description}>
-          {/* 条件渲染逻辑 */}
-          {loading && <p>正在查询，请稍候...</p>}
-          {error && <p style={{ color: 'red' }}>查询失败：{error}</p>}
-          {creditInfo && (
-            <div>
-              <p>剩余总额度 (Total Remaining): ${creditInfo.total_remaining.toFixed(2)}</p>
-              <p>已用额度 (Total Used): ${creditInfo.total_used.toFixed(2)}</p>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
-  );
+    // 使用破解的公式进行换算
+    const totalGranted = (remainQuota + usedQuota) / QUOTA_TO_USD_RATE;
+    const totalUsed = usedQuota / QUOTA_TO_USD_RATE;
+    const totalAvailable = remainQuota / QUOTA_TO_USD_RATE;
+
+    // 将格式化后的结果以 JSON 格式成功返回给前端
+    res.status(200).json({
+      total_granted: totalGranted.toFixed(4),
+      total_used: totalUsed.toFixed(4),
+      total_available: totalAvailable.toFixed(4),
+    });
+
+  } catch (error) {
+    console.error('API查询失败:', error);
+    res.status(500).json({ error: error.message });
+  }
 }
