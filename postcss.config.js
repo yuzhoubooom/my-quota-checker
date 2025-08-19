@@ -2,7 +2,7 @@
 
 module.exports = {
   plugins: {
-    tailwindcss: {},
+    '@tailwindcss/postcss': {}, // 更新为错误日志中指定的兼容包
     autoprefixer: {},
   },
-}
+};
