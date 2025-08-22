@@ -1,38 +1,42 @@
 export default async function handler(req, res) {
   if (req.method === 'POST') {
+    // 1. 同时读取令牌和用户ID两个环境变量
     const token = process.env.GLOBAL_VIP_ACCESS_TOKEN;
+    const userId = process.env.GLOBAL_VIP_USER_ID;
 
-    if (!token) {
-      return res.status(500).json({ error: '服务端未配置API密钥' });
+    // 2. 确保两个变量都已成功配置
+    if (!token || !userId) {
+      let missingVars = [];
+      if (!token) missingVars.push('GLOBAL_VIP_ACCESS_TOKEN');
+      if (!userId) missingVars.push('GLOBAL_VIP_USER_ID');
+      return res.status(500).json({ error: `服务端未配置必要的环境变量: ${missingVars.join(', ')}` });
     }
 
     try {
-      // 1. 使用您截图中显示的【唯一正确】的API地址
       const url = 'https://globalai.vip/api/token/';
 
       const response = await fetch(url, {
-        method: 'GET', // 2. 使用截图中显示的GET方法
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
+          // 3. 【决定性修正】将从环境变量中读取到的 userId 作为 'New-Api-User' 头的值
+          'New-Api-User': userId, 
           'Content-Type': 'application/json'
         }
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`API请求失败: ${response.status}`, errorText);
-        return res.status(response.status).json({ error: `上游API认证失败: ${errorText}` });
+        console.error(`上游API请求失败: ${response.status}`, errorText);
+        return res.status(401).json({ error: `上游API认证失败: ${errorText}` });
       }
 
       const result = await response.json();
 
-      // 3. 按照截图中【正确的数据结构】进行解析
       if (result && result.success && result.data && Array.isArray(result.data.items)) {
-        // 直接将我们需要的令牌列表数组返回给前端
         res.status(200).json(result.data.items);
       } else {
-        // 如果返回的数据结构不符合预期
-        res.status(500).json({ error: '上游API返回数据格式不正确' });
+        res.status(500).json({ error: '上游API返回数据格式不正确', details: result });
       }
 
     } catch (error) {
