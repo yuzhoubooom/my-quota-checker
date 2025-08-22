@@ -67,7 +67,7 @@ export default function HomePage() {
           padding: 2rem 0;
           display: flex;
           flex-direction: column;
-          justify-content: space-between;
+          /* 移除 justify-content，让页脚可以自由移动 */
           align-items: center;
         }
         .content-wrapper {
@@ -84,13 +84,12 @@ export default function HomePage() {
           font-weight: 600;
           text-align: center;
         }
-        /* 新增：图片的样式 */
+        /* 修改：图片的样式 */
         .page-image {
-          max-width: 150px; /* 控制图片最大宽度 */
-          height: auto;
+          max-width: 220px; /* 控制图片最大宽度 */
+          height: auto; /* 保持图片原始比例 */
           margin-bottom: 2rem;
-          border-radius: 50%; /* 圆形图片 */
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          /* 移除 border-radius: 50%; */
         }
         .search-box {
           width: 100%;
@@ -126,13 +125,12 @@ export default function HomePage() {
           font-size: 1rem;
           color: #555;
           text-align: center;
-          min-height: 24px; /* 避免消息出现/消失时页面跳动 */
+          min-height: 24px;
         }
         .error {
           color: #d32f2f;
           font-weight: bold;
         }
-        /* 新增：结果展示区域样式 (替换旧的 table 样式) */
         .result-container {
             width: 100%;
             max-width: 600px;
@@ -165,12 +163,13 @@ export default function HomePage() {
         }
         .status-active { color: #2e7d32; }
         .status-inactive { color: #d32f2f; }
-        .footer {
-          width: 100%;
-          padding-top: 2rem;
+        
+        /* 新增: 结果下方的技术支持文本样式 */
+        .result-footer {
+          margin-top: 1.5rem;
           text-align: center;
-          color: #999;
-          font-size: 0.9rem;
+          color: #aaa;
+          font-size: 0.85rem;
         }
 
         /* 响应式设计: 手机端 */
@@ -190,9 +189,9 @@ export default function HomePage() {
           <div className="content-wrapper">
             <h1 className="title">个人Token额度查询</h1>
             
-            {/* 新增的图片 */}
+            {/* 修改后的图片 */}
             <img 
-              src="https://tlias-yuzhou.oss-cn-hangzhou.aliyuncs.com/2025-08-23_02-06-44-0.png" 
+              src="https://tlias-yuzhou.oss-cn-hangzhou.aliyuncs.com/2025-08-23_02-13-50-0.png" 
               alt="Brand Logo" 
               className="page-image" 
             />
@@ -218,38 +217,42 @@ export default function HomePage() {
 
             {/* 修改后的结果展示区域 */}
             {searchResult && (
-              <div className="result-container">
-                <div className="result-item">
-                  <span className="result-label">名称</span>
-                  <span className="result-value">{searchResult.name}</span>
+              // 使用 React Fragment <> 包裹多个元素
+              <>
+                <div className="result-container">
+                  <div className="result-item">
+                    <span className="result-label">名称</span>
+                    <span className="result-value">{searchResult.name}</span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">已用额度 (USD)</span>
+                    <span className="result-value">${convertToUSD(searchResult.used_quota)}</span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">剩余额度 (USD)</span>
+                    <span className="result-value">${convertToUSD(searchResult.remain_quota)}</span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">总额度 (USD)</span>
+                    <span className="result-value">
+                      {searchResult.unlimited_quota ? '无限制' : `$${(parseFloat(convertToUSD(searchResult.used_quota)) + parseFloat(convertToUSD(searchResult.remain_quota))).toFixed(4)}`}
+                    </span>
+                  </div>
+                  <div className="result-item">
+                    <span className="result-label">状态</span>
+                    <span className={`result-value ${searchResult.status === 1 ? 'status-active' : 'status-inactive'}`}>
+                      {searchResult.status === 1 ? '✅ 正常' : '❌ 禁用'}
+                    </span>
+                  </div>
                 </div>
-                <div className="result-item">
-                  <span className="result-label">已用额度 (USD)</span>
-                  <span className="result-value">${convertToUSD(searchResult.used_quota)}</span>
-                </div>
-                <div className="result-item">
-                  <span className="result-label">剩余额度 (USD)</span>
-                  <span className="result-value">${convertToUSD(searchResult.remain_quota)}</span>
-                </div>
-                <div className="result-item">
-                  <span className="result-label">总额度 (USD)</span>
-                  <span className="result-value">
-                    {searchResult.unlimited_quota ? '无限制' : `$${(parseFloat(convertToUSD(searchResult.used_quota)) + parseFloat(convertToUSD(searchResult.remain_quota))).toFixed(4)}`}
-                  </span>
-                </div>
-                <div className="result-item">
-                  <span className="result-label">状态</span>
-                  <span className={`result-value ${searchResult.status === 1 ? 'status-active' : 'status-inactive'}`}>
-                    {searchResult.status === 1 ? '✅ 正常' : '❌ 禁用'}
-                  </span>
-                </div>
-              </div>
+
+                {/* 移动到此处的页脚 */}
+                <p className="result-footer">
+                  @2025 宇宙编辑部 boom 提供技术支持
+                </p>
+              </>
             )}
           </div>
-
-          <footer className="footer">
-            @2025 宇宙编辑部 boom 提供技术支持
-          </footer>
         </main>
       </div>
     </>
