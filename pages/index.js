@@ -20,7 +20,7 @@ const styles = {
 
 // --- 额度转换核心函数 ---
 const CONVERSION_RATE = 500000; // 500,000点 = $1.00
-const convertToUSD = (quota) => (quota / CONVERSION_RATE).toFixed(4); // 显示到小数点后4位以提高精度
+const convertToUSD = (quota) => (quota / CONVERSION_RATE).toFixed(4);
 
 // --- 页面核心组件 ---
 export default function HomePage() {
@@ -32,9 +32,7 @@ export default function HomePage() {
     const fetchData = async () => {
       try {
         const response = await fetch('/api/check', { method: 'POST' });
-        if (!response.ok) {
-          throw new Error(`API 请求失败: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`API 请求失败: ${response.status}`);
         const data = await response.json();
         setItems(data);
       } catch (err) {
@@ -65,10 +63,14 @@ export default function HomePage() {
         </thead>
         <tbody>
           {items.map((item) => {
-            // 根据我们分析出的逻辑进行换算
-            const usedUSD = convertToUSD(item.remain_quota);
-            const remainingUSD = convertToUSD(item.used_quota);
-            const totalUSD = (parseFloat(usedUSD) + parseFloat(remainingUSD)).toFixed(4);
+            // --- 这里是核心修正 ---
+            // 已用额度 = used_quota
+            // 剩余额度 = remain_quota
+            const usedUSD = convertToUSD(item.used_quota);
+            const remainingUSD = convertToUSD(item.remain_quota);
+            const totalUSD = item.unlimited_quota
+              ? '无限制'
+              : (parseFloat(usedUSD) + parseFloat(remainingUSD)).toFixed(4);
 
             return (
               <tr key={item.id}>
@@ -76,7 +78,7 @@ export default function HomePage() {
                 <td style={styles.td}><code style={styles.key}>{`${item.key.substring(0, 8)}...`}</code></td>
                 <td style={{...styles.td, ...styles.currency}}>${usedUSD}</td>
                 <td style={{...styles.td, ...styles.currency}}>${remainingUSD}</td>
-                <td style={{...styles.td, ...styles.currency}}>${totalUSD}</td>
+                <td style={{...styles.td, ...styles.currency}}>{totalUSD.startsWith('无') ? totalUSD : `$${totalUSD}`}</td>
                 <td style={item.status === 1 ? styles.statusActive : styles.statusInactive}>{item.status === 1 ? '✅ 正常' : '❌ 禁用'}</td>
               </tr>
             );
