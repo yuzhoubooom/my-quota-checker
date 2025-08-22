@@ -1,65 +1,46 @@
-// pages/api/check.js
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: '仅允许POST方法' });
-  }
+  if (req.method === 'POST') {
+    const token = process.env.GLOBAL_VIP_ACCESS_TOKEN;
 
-  try {
-    // 从前端获取用户想要查询的那个 sk-key
-    const { apiKey: userProvidedKey } = JSON.parse(req.body);
-    if (!userProvidedKey || !userProvidedKey.startsWith('sk-')) {
-      return res.status(400).json({ success: false, message: '请输入有效的API Key (sk-...).' });
+    if (!token) {
+      return res.status(500).json({ error: '服务端未配置API密钥' });
     }
 
-    // [颠覆性变更] 1. 从Vercel环境变量中读取真正的系统访问令牌
-    const SYSTEM_ACCESS_TOKEN = process.env.GLOBAL_VIP_ACCESS_TOKEN;
-    if (!SYSTEM_ACCESS_TOKEN) {
-        throw new Error('服务器配置错误：未找到 GLOBAL_VIP_ACCESS_TOKEN 环境变量。');
+    try {
+      // 1. 使用您截图中显示的【唯一正确】的API地址
+      const url = 'https://globalai.vip/api/token/';
+
+      const response = await fetch(url, {
+        method: 'GET', // 2. 使用截图中显示的GET方法
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API请求失败: ${response.status}`, errorText);
+        return res.status(response.status).json({ error: `上游API认证失败: ${errorText}` });
+      }
+
+      const result = await response.json();
+
+      // 3. 按照截图中【正确的数据结构】进行解析
+      if (result && result.success && result.data && Array.isArray(result.data.items)) {
+        // 直接将我们需要的令牌列表数组返回给前端
+        res.status(200).json(result.data.items);
+      } else {
+        // 如果返回的数据结构不符合预期
+        res.status(500).json({ error: '上游API返回数据格式不正确' });
+      }
+
+    } catch (error) {
+      console.error('调用外部API时发生网络或解析错误:', error);
+      res.status(500).json({ error: '调用上游API失败，请检查网络或服务器日志。' });
     }
-
-    // 2. 定义正确的API地址和请求方法
-    const API_URL = 'https://globalai.vip/api/token'; 
-    
-    // [颠覆性变更] 3. 使用系统令牌作为 Bearer Token 进行认证
-    const headers = {
-      'Authorization': `Bearer ${SYSTEM_ACCESS_TOKEN}`,
-    };
-
-    const response = await fetch(API_URL, {
-      method: 'GET',
-      headers: headers,
-    });
-
-    if (response.status === 401) {
-      // 这个401错误现在指向的是您的系统令牌，而不是用户的key
-      return res.status(200).json({ success: false, message: '系统认证失败 (401)。请检查Vercel环境变量中的 GLOBAL_VIP_ACCESS_TOKEN 是否正确或已过期。' });
-    }
-
-    if (!response.ok) {
-        throw new Error(`globalai.vip API 返回错误: ${response.status} ${response.statusText}`);
-    }
-
-    const jsonResponse = await response.json();
-
-    // [颠覆性变更] 4. 使用用户输入的 key 作为查询条件，在返回的列表中查找匹配项
-    const keyWithoutPrefix = userProvidedKey.substring(3); // 移除 "sk-"
-    const keyData = jsonResponse.data.items.find(item => item.key === keyWithoutPrefix);
-
-    if (!keyData) {
-      return res.status(200).json({ success: false, message: '成功连接并获取列表，但在您的账户下未找到用户输入的这个Key。' });
-    }
-
-    // 5. 提取数据并返回给前端
-    const { used_quota, remain_quota, unlimited_quota } = keyData;
-    res.status(200).json({
-      success: true,
-      is_unlimited: unlimited_quota,
-      used_quota: used_quota,
-      remain_quota: remain_quota,
-    });
-
-  } catch (error) {
-    console.error('API Route Error in check.js:', error);
-    res.status(500).json({ success: false, message: error.message || '服务器内部错误，请检查Vercel后台日志。' });
+  } else {
+    res.setHeader('Allow', 'POST');
+    res.status(405).end('Method Not Allowed');
   }
 }
