@@ -1,50 +1,50 @@
 export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    // 1. 同时读取令牌和用户ID两个环境变量
-    const token = process.env.GLOBAL_VIP_ACCESS_TOKEN;
-    const userId = process.env.GLOBAL_VIP_USER_ID;
+  // 只接受 POST 请求
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: '方法不允许 (Method Not Allowed)' });
+  }
 
-    // 2. 确保两个变量都已成功配置
-    if (!token || !userId) {
-      let missingVars = [];
-      if (!token) missingVars.push('GLOBAL_VIP_ACCESS_TOKEN');
-      if (!userId) missingVars.push('GLOBAL_VIP_USER_ID');
-      return res.status(500).json({ error: `服务端未配置必要的环境变量: ${missingVars.join(', ')}` });
+  try {
+    // 从前端请求的 body 中获取用户输入的 token
+    const { token } = req.body;
+
+    // 如果用户没有提供 token，返回错误
+    if (!token) {
+      return res.status(400).json({ message: '必须提供令牌 (Token is required)' });
     }
 
-    try {
-      const url = 'https://globalai.vip/api/token/';
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          // 3. 【决定性修正】将从环境变量中读取到的 userId 作为 'New-Api-User' 头的值
-          'New-Api-User': userId, 
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`上游API请求失败: ${response.status}`, errorText);
-        return res.status(401).json({ error: `上游API认证失败: ${errorText}` });
+    // --- 后端仍然需要获取完整列表以进行查找 ---
+    const response = await fetch('https://globalai.vip/api/token/list', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${process.env.API_KEY}`,
+        'Accept': 'application/json'
       }
+    });
 
-      const result = await response.json();
-
-      if (result && result.success && result.data && Array.isArray(result.data.items)) {
-        res.status(200).json(result.data.items);
-      } else {
-        res.status(500).json({ error: '上游API返回数据格式不正确', details: result });
-      }
-
-    } catch (error) {
-      console.error('调用外部API时发生网络或解析错误:', error);
-      res.status(500).json({ error: '调用上游API失败，请检查网络或服务器日志。' });
+    if (!response.ok) {
+      // 如果上游服务器出错，则将错误传递给前端
+      const errorText = await response.text();
+      console.error('Upstream API Error:', errorText);
+      return res.status(response.status).json({ message: `上游服务器错误 (Upstream server error): ${response.statusText}` });
     }
-  } else {
-    res.setHeader('Allow', 'POST');
-    res.status(405).end('Method Not Allowed');
+
+    const allData = await response.json();
+    const allTokens = allData.data;
+
+    // --- 核心逻辑：在列表中查找匹配的 token ---
+    const foundToken = allTokens.find(t => t.key === token.trim());
+
+    if (foundToken) {
+      // 如果找到了，只返回那一条数据
+      res.status(200).json(foundToken);
+    } else {
+      // 如果没找到，返回 404 Not Found
+      res.status(404).json({ message: '令牌未找到或无效 (Token not found or invalid)' });
+    }
+
+  } catch (error) {
+    console.error('Server-side Error:', error);
+    res.status(500).json({ message: '服务器内部错误 (Internal Server Error)' });
   }
 }
