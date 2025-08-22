@@ -1,17 +1,17 @@
 export default async function handler(req, res) {
-  // 1. 确保请求方法正确
+  // 只接受 POST 请求
   if (req.method !== 'POST') {
     return res.status(405).json({ message: '方法不允许 (Method Not Allowed)' });
   }
 
   try {
-    // 2. 从请求体中获取用户输入的token
+    // 从前端请求中获取用户输入的 token
     const { token } = req.body;
     if (!token) {
       return res.status(400).json({ message: '必须提供令牌 (Token is required)' });
     }
 
-    // 3. 调用上游API获取所有token的列表
+    // 调用上游 API
     const response = await fetch('https://globalai.vip/api/token/list', {
       method: 'GET',
       headers: {
@@ -20,29 +20,34 @@ export default async function handler(req, res) {
       }
     });
 
-    // 4. 检查上游API的响应状态
+    // 检查上游 API 响应是否成功
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Upstream API Error:', errorText);
       return res.status(response.status).json({ message: `上游服务器错误: ${response.statusText}` });
     }
 
-    const allData = await response.json();
+    const apiResponseObject = await response.json();
 
-    // 5. --- 【核心修正】---
-    // 我们直接检查返回的数据是不是一个数组，这才是符合真实情况的逻辑。
-    if (!Array.isArray(allData)) {
-      console.error('Invalid data structure from upstream API. Expected a direct array.', allData);
-      return res.status(500).json({ message: '从源API收到的数据格式不是预期的数组格式。' });
+    // --- 【核心修正】---
+    // 根据您提供的正确JSON格式，我们现在精确定位到 .data.items 数组
+    const allTokens = apiResponseObject?.data?.items;
+
+    // 添加一个健壮的检查，确保我们成功找到了那个数组
+    if (!Array.isArray(allTokens)) {
+      console.error('Invalid data structure from upstream API. Expected `.data.items` to be an array.', apiResponseObject);
+      return res.status(500).json({ message: '从源API收到的数据格式无效，无法找到令牌列表。' });
     }
 
-    // 6. 在这个正确的数组结构中查找用户提供的token
-    const foundToken = allData.find(t => t.key === token.trim());
+    // 在正确的令牌数组中进行查找
+    const foundToken = allTokens.find(t => t.key === token.trim());
 
-    // 7. 根据查找结果返回数据
+    // 根据查找结果返回数据
     if (foundToken) {
+      // 成功找到，返回200和该令牌的数据
       res.status(200).json(foundToken);
     } else {
+      // 未找到，返回404
       res.status(404).json({ message: '令牌未找到或无效 (Token not found or invalid)' });
     }
 
