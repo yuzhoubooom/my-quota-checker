@@ -78,11 +78,19 @@ export default function HomePage() {
           align-items: center;
         }
         .title {
-          margin: 0 0 2rem 0;
+          margin: 0 0 1.5rem 0;
           line-height: 1.2;
           font-size: 2.5rem;
           font-weight: 600;
           text-align: center;
+        }
+        /* 新增：图片的样式 */
+        .page-image {
+          max-width: 150px; /* 控制图片最大宽度 */
+          height: auto;
+          margin-bottom: 2rem;
+          border-radius: 50%; /* 圆形图片 */
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         .search-box {
           width: 100%;
@@ -99,7 +107,6 @@ export default function HomePage() {
           padding: 12px 15px;
           border: 1px solid #ddd;
           border-radius: 8px;
-          transition: border-color 0.2s;
         }
         .input:focus {
           border-color: #0070f3;
@@ -113,46 +120,48 @@ export default function HomePage() {
           color: white;
           border-radius: 8px;
           cursor: pointer;
-          transition: background-color 0.2s;
-        }
-        .button:hover {
-          background-color: #005bb5;
         }
         .message {
           margin-top: 1rem;
           font-size: 1rem;
           color: #555;
           text-align: center;
+          min-height: 24px; /* 避免消息出现/消失时页面跳动 */
         }
         .error {
           color: #d32f2f;
           font-weight: bold;
         }
-        .table-container {
+        /* 新增：结果展示区域样式 (替换旧的 table 样式) */
+        .result-container {
             width: 100%;
-            overflow-x: auto;
+            max-width: 600px;
             margin-top: 1rem;
-            border-radius: 8px;
+            background-color: #fff;
+            border-radius: 12px;
             border: 1px solid #eaeaea;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 1rem;
         }
-        table {
-            width: 100%;
-            min-width: 700px; /* 强制在窄屏上出现滚动条 */
-            border-collapse: collapse;
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 1rem;
         }
-        th, td {
-            padding: 14px 18px;
-            text-align: left;
-            white-space: nowrap;
-            border-bottom: 1px solid #eaeaea;
-        }
-        th {
-            background-color: #f9f9f9;
-            font-weight: 600;
-        }
-        tbody tr:last-child td {
+        .result-item:last-child {
             border-bottom: none;
+        }
+        .result-label {
+            color: #666;
+            font-weight: 500;
+        }
+        .result-value {
+            color: #111;
+            font-weight: 600;
+            font-family: Menlo, Monaco, Lucida Console, Liberation Mono, DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace;
         }
         .status-active { color: #2e7d32; }
         .status-inactive { color: #d32f2f; }
@@ -171,6 +180,8 @@ export default function HomePage() {
           .form {
             flex-direction: column;
           }
+          .result-container { padding: 0.5rem; }
+          .result-item { flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; }
         }
       `}</style>
 
@@ -178,6 +189,13 @@ export default function HomePage() {
         <main className="main-layout">
           <div className="content-wrapper">
             <h1 className="title">个人Token额度查询</h1>
+            
+            {/* 新增的图片 */}
+            <img 
+              src="https://tlias-yuzhou.oss-cn-hangzhou.aliyuncs.com/2025-08-23_02-06-44-0.png" 
+              alt="Brand Logo" 
+              className="page-image" 
+            />
 
             <div className="search-box">
               <form onSubmit={handleSearch} className="form">
@@ -192,34 +210,39 @@ export default function HomePage() {
               </form>
             </div>
 
-            {isLoading && <p className="message">正在初始化查询服务...</p>}
-            {error && <p className="message error">服务初始化失败: {error}</p>}
-            {searchMessage && <p className="message">{searchMessage}</p>}
+            <div className="message">
+                {isLoading && <p>正在初始化查询服务...</p>}
+                {error && <p className="error">服务初始化失败: {error}</p>}
+                {searchMessage && <p>{searchMessage}</p>}
+            </div>
 
+            {/* 修改后的结果展示区域 */}
             {searchResult && (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>名称</th>
-                      <th>已用额度 (USD)</th>
-                      <th>剩余额度 (USD)</th>
-                      <th>总额度 (USD)</th>
-                      <th>状态</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>{searchResult.name}</td>
-                      <td>${convertToUSD(searchResult.used_quota)}</td>
-                      <td>${convertToUSD(searchResult.remain_quota)}</td>
-                      <td>{searchResult.unlimited_quota ? '无限制' : `$${(parseFloat(convertToUSD(searchResult.used_quota)) + parseFloat(convertToUSD(searchResult.remain_quota))).toFixed(4)}`}</td>
-                      <td className={searchResult.status === 1 ? 'status-active' : 'status-inactive'}>
-                        {searchResult.status === 1 ? '✅ 正常' : '❌ 禁用'}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div className="result-container">
+                <div className="result-item">
+                  <span className="result-label">名称</span>
+                  <span className="result-value">{searchResult.name}</span>
+                </div>
+                <div className="result-item">
+                  <span className="result-label">已用额度 (USD)</span>
+                  <span className="result-value">${convertToUSD(searchResult.used_quota)}</span>
+                </div>
+                <div className="result-item">
+                  <span className="result-label">剩余额度 (USD)</span>
+                  <span className="result-value">${convertToUSD(searchResult.remain_quota)}</span>
+                </div>
+                <div className="result-item">
+                  <span className="result-label">总额度 (USD)</span>
+                  <span className="result-value">
+                    {searchResult.unlimited_quota ? '无限制' : `$${(parseFloat(convertToUSD(searchResult.used_quota)) + parseFloat(convertToUSD(searchResult.remain_quota))).toFixed(4)}`}
+                  </span>
+                </div>
+                <div className="result-item">
+                  <span className="result-label">状态</span>
+                  <span className={`result-value ${searchResult.status === 1 ? 'status-active' : 'status-inactive'}`}>
+                    {searchResult.status === 1 ? '✅ 正常' : '❌ 禁用'}
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -232,4 +255,3 @@ export default function HomePage() {
     </>
   );
 }
-
