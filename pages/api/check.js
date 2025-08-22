@@ -1,69 +1,50 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: '方法不允许 (Method Not Allowed)' });
-  }
+  if (req.method === 'POST') {
+    // 1. 同时读取令牌和用户ID两个环境变量
+    const token = process.env.GLOBAL_VIP_ACCESS_TOKEN;
+    const userId = process.env.GLOBAL_VIP_USER_ID;
 
-  try {
-    const { token } = req.body;
-    if (!token) {
-      return res.status(400).json({ message: '必须提供令牌 (Token is required)' });
+    // 2. 确保两个变量都已成功配置
+    if (!token || !userId) {
+      let missingVars = [];
+      if (!token) missingVars.push('GLOBAL_VIP_ACCESS_TOKEN');
+      if (!userId) missingVars.push('GLOBAL_VIP_USER_ID');
+      return res.status(500).json({ error: `服务端未配置必要的环境变量: ${missingVars.join(', ')}` });
     }
 
-    const response = await fetch('https://globalai.vip/api/token/list', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${process.env.API_KEY}`,
-        'Accept': 'application/json'
+    try {
+      const url = 'https://globalai.vip/api/token/';
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // 3. 【决定性修正】将从环境变量中读取到的 userId 作为 'New-Api-User' 头的值
+          'New-Api-User': userId, 
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`上游API请求失败: ${response.status}`, errorText);
+        return res.status(401).json({ error: `上游API认证失败: ${errorText}` });
       }
-    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Upstream API Error Response Text:', errorText);
-      return res.status(response.status).json({
-        message: '上游API返回错误状态码。',
-        debug_response_text: errorText
-      });
+      const result = await response.json();
+
+      if (result && result.success && result.data && Array.isArray(result.data.items)) {
+        res.status(200).json(result.data.items);
+      } else {
+        res.status(500).json({ error: '上游API返回数据格式不正确', details: result });
+      }
+
+    } catch (error) {
+      console.error('调用外部API时发生网络或解析错误:', error);
+      res.status(500).json({ error: '调用上游API失败，请检查网络或服务器日志。' });
     }
-
-    // 将响应解析为JSON
-    const apiResponseObject = await response.json();
-
-    // --- 【核心诊断步骤】---
-    // 1. 在服务器后台打印出收到的完整数据结构，这是最重要的线索。
-    console.log('--- UPSTREAM API RESPONSE RECEIVED BY SERVER ---');
-    console.log(JSON.stringify(apiResponseObject, null, 2));
-
-    // 2. 尝试按照您给的正确格式去解析
-    const allTokens = apiResponseObject?.data?.items;
-
-    // 3. 如果解析失败，我们将把服务器实际收到的内容，直接通过错误信息返回给前端页面！
-    if (!Array.isArray(allTokens)) {
-      const receivedDataStructure = JSON.stringify(apiResponseObject);
-      console.error(`关键错误：期望 .data.items 是一个数组，但解析失败。收到的完整数据是: ${receivedDataStructure}`);
-      
-      // 在前端页面上直接显示出服务器收到了什么，这样我们就能看到问题所在！
-      return res.status(500).json({
-        message: '服务器收到的数据结构非预期，无法处理。',
-        debug_received_data: apiResponseObject // 把收到的整个对象都发回前端
-      });
-    }
-
-    // 如果代码能走到这里，说明数据结构是对的，剩下的逻辑就没问题
-    const foundToken = allTokens.find(t => t.key === token.trim());
-
-    if (foundToken) {
-      res.status(200).json(foundToken);
-    } else {
-      res.status(404).json({ message: '令牌在列表中未找到。' });
-    }
-
-  } catch (error) {
-    // 捕获比如 response.json() 失败等错误
-    console.error('Server-side Catch Block Error:', error);
-    res.status(500).json({
-      message: '服务器在处理过程中发生异常。',
-      debug_error_message: error.message
-    });
+  } else {
+    res.setHeader('Allow', 'POST');
+    res.status(405).end('Method Not Allowed');
   }
 }

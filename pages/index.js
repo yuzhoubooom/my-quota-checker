@@ -1,118 +1,96 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-// --- 样式对象 (无需额外CSS文件) ---
+// --- 样式对象 (内联, 无需额外CSS文件) ---
 const styles = {
   container: { padding: '0 2rem', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif' },
   main: { minHeight: '100vh', padding: '4rem 0', display: 'flex', flexDirection: 'column', alignItems: 'center' },
-  title: { margin: '0 0 2rem 0', lineHeight: '1.15', fontSize: '32px', textAlign: 'center' },
-  form: { width: '100%', maxWidth: '600px', display: 'flex', gap: '10px' },
-  input: { flexGrow: '1', padding: '12px 15px', fontSize: '16px', border: '1px solid #ccc', borderRadius: '6px' },
-  button: { padding: '12px 20px', fontSize: '16px', border: 'none', borderRadius: '6px', backgroundColor: '#0070f3', color: 'white', cursor: 'pointer' },
-  resultArea: { marginTop: '30px', width: '100%', maxWidth: '600px' },
-  resultCard: { background: '#f9f9f9', border: '1px solid #eaeaea', borderRadius: '8px', padding: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
-  dl: { margin: 0 },
-  dt: { fontWeight: 'bold', color: '#555', marginTop: '12px' },
-  dd: { margin: '4px 0 0 0', fontSize: '18px', fontFamily: 'monospace', color: '#000', wordBreak: 'break-all' },
-  ddStatusActive: { color: 'green' },
-  ddStatusInactive: { color: 'red' },
-  message: { textAlign: 'center', fontSize: '18px', padding: '20px' },
-  errorMessage: { color: 'red' }
+  title: { margin: '0 0 2rem 0', lineHeight: '1.15', fontSize: '3rem', textAlign: 'center' },
+  grid: { display: 'flex', justifyContent: 'center', width: '100%', maxWidth: '900px' },
+  table: { width: '100%', borderCollapse: 'collapse', marginTop: '1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+  th: { borderBottom: '2px solid #0070f3', padding: '12px 15px', textAlign: 'left', backgroundColor: '#f8f9fa', color: '#333', fontWeight: '600' },
+  td: { borderBottom: '1px solid #eaeaea', padding: '10px 15px', textAlign: 'left' },
+  keyName: { fontWeight: 'bold' },
+  key: { fontFamily: 'monospace', fontSize: '0.9rem', backgroundColor: '#f0f0f0', padding: '2px 5px', borderRadius: '4px' },
+  currency: { fontFamily: 'monospace', fontSize: '1rem' },
+  statusActive: { color: 'green' },
+  statusInactive: { color: 'red' },
+  error: { color: 'red', fontWeight: 'bold' },
+  loading: { fontSize: '1.2rem', color: '#555' }
 };
 
 // --- 额度转换核心函数 ---
 const CONVERSION_RATE = 500000; // 500,000点 = $1.00
-const convertToUSD = (quota) => `$${(quota / CONVERSION_RATE).toFixed(4)}`;
+const convertToUSD = (quota) => (quota / CONVERSION_RATE).toFixed(4); // 显示到小数点后4位以提高精度
 
-export default function QueryPage() {
-  const [tokenInput, setTokenInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+// --- 页面核心组件 ---
+export default function HomePage() {
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [result, setResult] = useState(null);
+  const [items, setItems] = useState([]);
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!tokenInput.trim()) return;
-
-    setIsLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const response = await fetch('/api/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tokenInput.trim() }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || '查询失败，请检查您的令牌。');
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('/api/check', { method: 'POST' });
+        if (!response.ok) {
+          throw new Error(`API 请求失败: ${response.status}`);
+        }
+        const data = await response.json();
+        setItems(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
       }
-      
-      setResult(data);
+    };
+    fetchData();
+  }, []);
 
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const renderResult = () => {
-    if (isLoading) return <p style={styles.message}>查询中...</p>;
-    if (error) return <p style={{...styles.message, ...styles.errorMessage}}>{error}</p>;
-    if (!result) return <p style={styles.message}>请输入您的令牌以查询额度信息。</p>;
-    
-    // 再次确认：根据我们之前的分析，API的remain_quota是已用，used_quota是剩余
-    const usedUSD = convertToUSD(result.remain_quota);
-    const remainingUSD = convertToUSD(result.used_quota);
-    const totalUSD = convertToUSD(result.remain_quota + result.used_quota);
+  const renderContent = () => {
+    if (isLoading) return <p style={styles.loading}>正在查询额度信息，请稍候...</p>;
+    if (error) return <p style={styles.error}>出错了: {error}</p>;
+    if (!items || items.length === 0) return <p>成功连接，但未获取到任何密钥信息。</p>;
 
     return (
-      <div style={styles.resultCard}>
-        <dl style={styles.dl}>
-          <dt style={styles.dt}>名称</dt>
-          <dd style={styles.dd}>{result.name}</dd>
-          
-          <dt style={styles.dt}>状态</dt>
-          <dd style={{...styles.dd, ...(result.status === 1 ? styles.ddStatusActive : styles.ddStatusInactive)}}>
-            {result.status === 1 ? '✅ 正常' : '❌ 禁用'}
-          </dd>
-          
-          <dt style={styles.dt}>已用额度</dt>
-          <dd style={styles.dd}>{usedUSD}</dd>
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th style={styles.th}>名称</th>
+            <th style={styles.th}>密钥 (部分)</th>
+            <th style={styles.th}>已用额度 (USD)</th>
+            <th style={styles.th}>剩余额度 (USD)</th>
+            <th style={styles.th}>总额度 (USD)</th>
+            <th style={styles.th}>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            // 根据我们分析出的逻辑进行换算
+            const usedUSD = convertToUSD(item.remain_quota);
+            const remainingUSD = convertToUSD(item.used_quota);
+            const totalUSD = (parseFloat(usedUSD) + parseFloat(remainingUSD)).toFixed(4);
 
-          <dt style={styles.dt}>剩余额度</dt>
-          <dd style={styles.dd}>{remainingUSD}</dd>
-          
-          <dt style={styles.dt}>总额度</dt>
-          <dd style={styles.dd}>{totalUSD}</dd>
-        </dl>
-      </div>
+            return (
+              <tr key={item.id}>
+                <td style={{...styles.td, ...styles.keyName}}>{item.name}</td>
+                <td style={styles.td}><code style={styles.key}>{`${item.key.substring(0, 8)}...`}</code></td>
+                <td style={{...styles.td, ...styles.currency}}>${usedUSD}</td>
+                <td style={{...styles.td, ...styles.currency}}>${remainingUSD}</td>
+                <td style={{...styles.td, ...styles.currency}}>${totalUSD}</td>
+                <td style={item.status === 1 ? styles.statusActive : styles.statusInactive}>{item.status === 1 ? '✅ 正常' : '❌ 禁用'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     );
-  }
+  };
 
   return (
     <div style={styles.container}>
       <main style={styles.main}>
-        <h1 style={styles.title}>个人令牌额度查询</h1>
-        <form style={styles.form} onSubmit={handleSearch}>
-          <input
-            type="text"
-            style={styles.input}
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            placeholder="请在此处粘贴您的令牌/密钥"
-            aria-label="Token Input"
-          />
-          <button type="submit" style={styles.button} disabled={isLoading}>
-            {isLoading ? '查询中...' : '查询'}
-          </button>
-        </form>
-        <div style={styles.resultArea}>
-          {renderResult()}
-        </div>
+        <h1 style={styles.title}>密钥额度查询面板</h1>
+        <div style={styles.grid}>{renderContent()}</div>
       </main>
     </div>
   );
