@@ -1,50 +1,44 @@
-export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    // 1. 同时读取令牌和用户ID两个环境变量
-    const token = process.env.GLOBAL_VIP_ACCESS_TOKEN;
-    const userId = process.env.GLOBAL_VIP_USER_ID;
+import { VercelRequest, VercelResponse } from '@vercel/node';
 
-    // 2. 确保两个变量都已成功配置
-    if (!token || !userId) {
-      let missingVars = [];
-      if (!token) missingVars.push('GLOBAL_VIP_ACCESS_TOKEN');
-      if (!userId) missingVars.push('GLOBAL_VIP_USER_ID');
-      return res.status(500).json({ error: `服务端未配置必要的环境变量: ${missingVars.join(', ')}` });
-    }
-
-    try {
-      const url = 'https://globalai.vip/api/token/';
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          // 3. 【决定性修正】将从环境变量中读取到的 userId 作为 'New-Api-User' 头的值
-          'New-Api-User': userId, 
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`上游API请求失败: ${response.status}`, errorText);
-        return res.status(401).json({ error: `上游API认证失败: ${errorText}` });
-      }
-
-      const result = await response.json();
-
-      if (result && result.success && result.data && Array.isArray(result.data.items)) {
-        res.status(200).json(result.data.items);
-      } else {
-        res.status(500).json({ error: '上游API返回数据格式不正确', details: result });
-      }
-
-    } catch (error) {
-      console.error('调用外部API时发生网络或解析错误:', error);
-      res.status(500).json({ error: '调用上游API失败，请检查网络或服务器日志。' });
-    }
-  } else {
-    res.setHeader('Allow', 'POST');
-    res.status(405).end('Method Not Allowed');
+export default async (req: VercelRequest, res: VercelResponse) => {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Only POST requests are allowed' });
   }
-}
+
+  const accessToken = process.env.API_ACCESS_TOKEN;
+
+  if (!accessToken) {
+    return res.status(500).json({ message: 'API access token is not configured on the server.' });
+  }
+
+  try {
+    // --- 这里是唯一的、关键的修正：将 size=10 改为 size=1000 ---
+    const apiResponse = await fetch('https://globalai.vip/api/token/?p=1&size=1000', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ access_token: accessToken }),
+    });
+
+    if (!apiResponse.ok) {
+      const errorText = await apiResponse.text();
+      console.error('Upstream API error:', errorText);
+      return res.status(apiResponse.status).json({ message: 'Failed to fetch data from upstream API.', details: errorText });
+    }
+
+    const data = await apiResponse.json();
+
+    // 假设数据结构是 { ..., data: { data: [...] } }
+    if (data && data.data && Array.isArray(data.data.data)) {
+        res.status(200).json(data.data.data);
+    } else {
+        console.error('Unexpected data structure from upstream API:', data);
+        res.status(500).json({ message: 'Received unexpected data structure from upstream API.' });
+    }
+
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+};
